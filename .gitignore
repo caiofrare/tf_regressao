@@ -1,0 +1,8 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.Claude
+.DS_Store
+*.html
+TF.pdf

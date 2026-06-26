@@ -1,0 +1,626 @@
+---
+title: "IMC, Tabagismo e Custos de Saúde: uma Análise de Regressão do Medical Cost Personal Dataset"
+author:
+  - "Arthur Agostinho Furlan Teixeira 164363"
+  - "Caio Frare 242578"
+  - "João Eduardo Pastori Garcia 277172"
+  - "Luiz Eduardo Costa Martins Rodrigues 284715"
+header-includes:
+   - \usepackage[brazilian]{babel}
+   - \usepackage{float}
+   - \floatplacement{figure}{H}
+   - \floatplacement{table}{H}
+   - \usepackage{eso-pic}
+   - \usepackage{titling}
+   - \pretitle{\begin{center}\vspace{2\baselineskip}\LARGE\bfseries}
+   - \posttitle{\par\end{center}\vspace{0.5em}}
+   - \renewcommand{\and}{\\}
+   - \preauthor{\begin{center}\large}
+   - \postauthor{\end{center}}
+bibliography: referencia.bib
+output:
+  bookdown::pdf_document2:
+    number_sections: true
+    toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, fig.pos = "H")
+options(scipen=9999)
+```
+
+
+```{r}
+# inclua os pacotes que for usar aqui, altere como preferir
+library(tidyverse)
+library(knitr)
+library(GGally)
+library(lmtest)
+library(broom)
+set.seed(1)
+```
+
+```{=latex}
+\AddToShipoutPictureFG*{
+  \AtPageUpperLeft{\hspace{1.5cm}\raisebox{-\totalheight-1.2cm}{\includegraphics[width=3cm]{imagens/unicamp.pdf}}}
+  \AtPageUpperLeft{\hspace{\dimexpr\paperwidth-1.5cm-3cm\relax}\raisebox{-\totalheight-1.2cm}{\includegraphics[width=3cm]{imagens/imecc.png}}}
+}
+```
+
+\newpage
+
+# Introdução {#sec-intro}
+
+<!-- sua introdução aqui -->
+
+<!-- O seu texto deve apresentar o assunto, motivar e explicar ao leitor o objetivo.-->
+
+<!-- O objetivo, a(s) pergunta(s) específica(s) que você quer responder devem estar claras na introdução, e, lá na conclusão, você deve retomar o argumento e mostrar como resolveu o problema. -->
+
+<!-- Finalize com um parágrafo explicando o que está por vir nas próximas seções do relatório (muito brevemente), desta forma, muitas vezes a introdução é a última parte que escrevemos, pois deve motivar e dar um resumo rápido do que está por vir -->
+
+<!-- Utilize cross-reference para mencionar as seções no texto, por exemplo: -->
+<!--  Na Seção \@ref(sec-banco), ... -->
+
+Os gastos com saúde representam um dos maiores desafios econômicos das sociedades
+contemporâneas. Em 2024, os Estados Unidos destinaram aproximadamente 18,0% do seu
+Produto Interno Bruto (PIB) à saúde, equivalendo a US\$ 5,3 trilhões, ou cerca de
+US\$ 15.474 por habitante [@hartman2026nhe]. Esse montante supera em mais de duas
+vezes a média dos países da Organização para a Cooperação e Desenvolvimento
+Econômico (OCDE), cujos gastos per capita em saúde situam-se, em geral, abaixo de
+US\$ 7.000 [@oecd2024health]. No centro desse paradoxo estão fatores de risco
+comportamentais e antropométricos, com destaque para a obesidade e o tabagismo.
+Dados do *National Health and Nutrition Examination Survey* (NHANES) indicam que,
+entre 2021 e 2023, 40,3% dos adultos norte-americanos apresentavam obesidade
+(IMC $\geq$ 30 kg/m²), e 9,4% obesidade grave (IMC $\geq$ 40 kg/m²)
+[@emmerich2024nhanes]. A obesidade está associada a um aumento de 36% nos gastos
+hospitalares e ambulatoriais, e de 77% nos custos com medicamentos, em comparação
+com indivíduos com peso normal [@sturm2002obesity]. Estimativas recentes indicam
+que a obesidade é responsável por aproximadamente US\$ 172,7 bilhões em despesas
+médicas anuais nos EUA [@cawley2021bmi]. O tabagismo, por sua vez, embora com
+tendência de queda nas últimas décadas, ainda eleva em 21% os gastos hospitalares
+e ambulatoriais dos fumantes em relação aos não fumantes [@sturm2002obesity].
+
+A interação entre obesidade e tabagismo é particularmente relevante do ponto de
+vista clínico e econômico. Pesquisas publicadas no *New England Journal of Medicine*
+demonstraram que os efeitos negativos do aumento do IMC sobre a expectativa de vida
+tendem a superar os benefícios associados à redução do tabagismo na população geral
+[@stewart2009forecasting]. Cada aumento de 2 unidades no IMC em populações com
+sobrepeso reduz a expectativa de vida em homens de forma comparável a um aumento de
+10 pontos percentuais na prevalência do tabagismo [@keiding2010effects].
+
+O contexto brasileiro oferece um contraponto relevante. O *Sistema Único de Saúde*
+(SUS), criado pela Constituição Federal de 1988 e regulamentado pelas Leis n.º
+8.080/90 e 8.142/90, é reconhecido internacionalmente como um dos maiores sistemas
+públicos de saúde universal do mundo, cobrindo uma população de aproximadamente
+220 milhões de pessoas em um território de 8,5 milhões de km² [@sus2024wikipedia].
+Diferentemente do modelo norte-americano, que é predominantemente privado, com
+cobertura pública restrita a idosos, pessoas com deficiência e populações
+vulneráveis via *Medicare* e *Medicaid*, o Brasil garante acesso universal e
+gratuito à saúde como direito constitucional [@santos2025comparison]. Ainda assim,
+o SUS enfrenta desafios estruturais de subfinanciamento: o Brasil destina cerca de
+9–10% do PIB à saúde, com gasto público per capita muito inferior ao
+norte-americano [@oecd2024health].
+
+No plano epidemiológico, o Brasil apresenta trajetória ascendente de obesidade: o
+Ministério da Saúde registrou prevalência de 24,3% de obesidade entre adultos em
+2023, com elevação contínua desde 2006 [@vigitel2023]. Entre 2006 e 2021, a
+prevalência de obesidade grave (IMC $\geq$ 40 kg/m²) cresceu 120%, sinalizando uma
+epidemia em aceleração [@silveira2025severe]. Quanto ao tabagismo, estima-se que
+11,85% dos adultos brasileiros sejam fumantes diários em 2024, proporção inferior à
+norte-americana, mas ainda associada a impactos expressivos nos custos do sistema
+de saúde [@statista2024brazil].
+
+O financiamento privado da saúde é um elemento central tanto no sistema
+norte-americano quanto, de forma complementar, no brasileiro. Nos Estados Unidos,
+os planos de saúde privados cobrem aproximadamente 214 milhões de pessoas (55% da
+população) e respondem por cerca de 31% de todo o gasto nacional em saúde
+[@hartman2026nhe; @kfftracker2024]. Em 2024, os gastos das seguradoras privadas
+somaram US\$ 1,6 trilhão, crescimento de 8,8% em relação ao ano anterior, o maior
+entre os principais pagadores do sistema [@hartman2026nhe]. Do ponto de vista do
+trabalhador, os prêmios anuais de planos patrocinados pelo empregador alcançaram,
+em média, US\$ 8.951 para cobertura individual e US\$ 25.572 para cobertura familiar
+em 2024 [@kff2024ehbs]. No Brasil, o sistema de saúde suplementar, regulado pela
+*Agência Nacional de Saúde Suplementar* (ANS), atingiu recorde histórico de
+cobertura em 2024, com 52,2 milhões de beneficiários em planos médico-hospitalares,
+correspondendo a cerca de 25% da população [@ansrecord2025], com receita total
+anual de R\$ 242,6 bilhões e despesas assistenciais de aproximadamente R\$ 192
+bilhões [@ans2025sit]. Os reajustes anuais autorizados pela ANS para planos
+individuais — em parte reflexo do aumento das despesas assistenciais per capita
+(9,35% em 2024) — ilustram que, embora os sistemas de saúde brasileiro e
+norte-americano divirjam radicalmente em estrutura e cobertura, ambos enfrentam o
+desafio comum do crescimento dos custos médicos [@ansteto2024; @ansteto2025].
+
+Diante desse cenário, o presente trabalho utiliza o conjunto de dados
+*Medical Cost Personal Dataset* [@kaggle_insurance], composto por registros de
+beneficiários de planos de saúde privados nos Estados Unidos, para investigar os
+determinantes dos custos individuais de assistência médica. A capacidade de estimar
+com precisão o custo esperado de um beneficiário a partir de suas características
+individuais tem implicações diretas para a gestão financeira de operadoras e
+seguradoras de saúde: permite o cálculo de prêmios atuarialmente mais justos, o
+dimensionamento de reservas técnicas e a identificação de subgrupos de alto risco
+que demandam intervenções preventivas prioritárias [@sturm2002obesity;
+@cawley2021bmi]. No contexto brasileiro, onde as despesas assistenciais per capita
+cresceram 9,35% em 2024 [@ansteto2025] e os reajustes autorizados pela ANS são
+diretamente calibrados pelo comportamento dessas despesas [@ansteto2024], modelos
+preditivos de custo individual constituem ferramentas de suporte à decisão para
+operadoras, gestores do SUS e formuladores de políticas públicas de saúde.
+
+O **objetivo principal** é modelar e quantificar a associação entre características
+individuais — em especial o *Índice de Massa Corporal* (IMC) e o status de
+tabagismo — e os custos médicos anuais cobrados pelo seguro de saúde, por meio de um
+modelo de regressão linear. Como **objetivos específicos**, busca-se: (i) avaliar o
+efeito isolado e conjunto (interação) do IMC e do tabagismo sobre os custos; (ii)
+investigar a contribuição de demais covariáveis, como idade, sexo, número de
+dependentes e região geográfica; e (iii) interpretar os parâmetros estimados de
+forma que os resultados sejam compreensíveis para um leitor não especializado em
+estatística.
+
+O trabalho está organizado da seguinte forma: a Seção \@ref(sec-banco) descreve o
+conjunto de dados e as variáveis utilizadas; a Seção \@ref(sec-exp) apresenta a
+análise exploratória; a Seção \@ref(sec-modelo) detalha o modelo proposto e a
+interpretação dos parâmetros; a Seção \@ref(sec-disc) discute os resultados à luz
+dos objetivos propostos; e o Apêndice reúne os diagnósticos do modelo.
+
+
+\newpage
+
+# Banco de dados {#sec-banco}
+
+```{r carrega-dados}
+# código para carregar seu banco de dados
+# O dataset Medical Cost Personal Dataset (Kaggle, mirichoi0218/insurance) é
+# pequeno (1338 linhas), mas para garantir reprodutibilidade sem depender do
+# upload no Moodle, ele é baixado de um espelho público no GitHub.
+url <- "https://raw.githubusercontent.com/stedy/Machine-Learning-with-R-datasets/master/insurance.csv"
+dados <- read.csv(url, stringsAsFactors = FALSE)
+
+# Não há filtros de observações: o banco não possui valores faltantes
+# (sum(is.na(dados)) == 0) e todas as 1338 observações são utilizadas.
+n_obs <- nrow(dados)
+n_na  <- sum(is.na(dados))
+```
+
+<!-- sua descriçao do banco de dados/variáveis aqui. Coloque a fonte/referência do banco de dados, coloque em anexo/link para codebook, caso tenha muitas variáveis, para nao deixar essa seçao muito extensa -->
+
+O conjunto de dados utilizado é o *Medical Cost Personal Dataset* [@kaggle_insurance],
+disponível publicamente no Kaggle. Ele reúne `r n_obs` registros de beneficiários de
+planos de saúde privados nos Estados Unidos, sem valores faltantes
+(`r n_na` observações ausentes), de modo que **todas** as observações são utilizadas,
+sem necessidade de filtros. Cada linha corresponde a um indivíduo e contém as sete
+variáveis descritas na Tabela \@ref(tab:codebook). A variável resposta de interesse é
+`charges` (custo médico anual cobrado pelo plano).
+
+```{r codebook}
+codebook <- data.frame(
+  Variável = c("age", "sex", "bmi", "children", "smoker", "region", "charges"),
+  Tipo = c("Numérica (discreta)", "Categórica", "Numérica (contínua)",
+           "Numérica (discreta)", "Categórica", "Categórica", "Numérica (contínua)"),
+  Descrição = c(
+    "Idade do beneficiário, em anos",
+    "Sexo (female, male)",
+    "Índice de Massa Corporal (kg/m²)",
+    "Número de filhos/dependentes cobertos pelo plano",
+    "Indicador de tabagismo (yes, no)",
+    "Região dos EUA (northeast, northwest, southeast, southwest)",
+    "Custo médico anual cobrado pelo plano (US$) — variável resposta"
+  )
+)
+kable(codebook, booktabs = TRUE,
+      caption = "Descrição das variáveis do Medical Cost Personal Dataset.")
+```
+
+
+\newpage
+
+# Análise exploratória {#sec-exp}
+
+<!-- Apresente análise exploratória relevante dos dados para auxiliar nos passos iniciais da busca por um modelo.  -->
+
+<!-- * Apresente uma breve análise exploratória utilizando gráficos com o objetivo de  -->
+<!--    estudar a associação de das variáveis preditoras com a variável resposta.  -->
+
+<!-- Qualquer tabela /figura presente no relatório precisa ser introduzida e referenciada no texto. Explique ao leitor o propósito das mesmas. -->
+
+<!--    Considere tipos adequados de gráficos para cada tipo de variável e objetivos. -->
+<!--    * Podem fazer vários gráficos, para explorar, mas, no relatório, sejam suscintos, escolhendo apenas os principais. -->
+<!--    * Todos os gráficos escolhidos por você para serem incluídos no relatório devem conter legendas explicativas  -->
+<!--    (*captions*) claras e informativas, indicando o que está sendo analisado  -->
+<!--    e destacando os principais padrões/conclusões observados.  -->
+<!--    Caso não tenha nada relevante a ser comentado, não inclua no relatório. -->
+<!--    * Apresente sua análise e comente os resultados, reforçando que o objetivo  -->
+<!--    principal é estudar a associaçao de cada variável com a variável resposta.  -->
+<!--    * Com base na análise exploratória, aplique filtros e/ou reagrupe/filtre níveis de variáveis categóricas com pouquíssimas observações, etc...   -->
+
+<!-- Caso decida utilizar transformação de alguma variável, criar outra variável, padronizar, etc... Aqui é o momento de mencionar/motivar essas decisões. Se for este o caso, acrescente um parágrafo explicando as transformações que serão feitas (preprocessamento)-->
+
+<!-- Alguma variável será descartada logo de início? Justifique, se for o caso-->
+
+<!-- Algumas obs serão descartadas logo de início? Justifique, se for o caso-->
+
+<!-- Apresente as estatísticas e gráficos que ajudam a atingir o objetivo definido na introdução-->
+
+<!-- Gráficos exploratórios/univariados que você fez apenas para "limpar" os dados não precisam, necessariamente, aparecer no texto do relatório, apenas inclua gráficos que auxiliem no objetivo principal. -->
+
+
+<!-- Deixe claro qual o que será excluído, o que será criado/transformado. -->
+
+```{r stats-desc}
+desc_num <- dados %>%
+  summarise(across(c(age, bmi, children, charges),
+                   list(Mínimo = min, Média = mean, Mediana = median,
+                        Máximo = max, `Desvio-padrão` = sd))) %>%
+  pivot_longer(everything(),
+               names_to = c("Variável", ".value"),
+               names_sep = "_")
+kable(desc_num, booktabs = TRUE, digits = 1,
+      caption = "Estatísticas descritivas das variáveis numéricas.")
+charges_media <- mean(dados$charges)
+charges_med   <- median(dados$charges)
+prop_fumante  <- mean(dados$smoker == "yes") * 100
+```
+
+A Tabela \@ref(tab:stats-desc) resume as variáveis numéricas. O custo médio anual é de
+US\$ `r format(round(charges_media), big.mark = ".", decimal.mark = ",")`, bem superior
+à mediana de US\$ `r format(round(charges_med), big.mark = ".", decimal.mark = ",")`,
+o que já antecipa uma distribuição fortemente assimétrica à direita. Quanto às
+variáveis categóricas, os fumantes representam apenas `r round(prop_fumante, 1)`% da
+amostra, e as quatro regiões e os dois sexos estão aproximadamente balanceados.
+
+**Pergunta 1: como se distribui o custo médico?** A Figura \@ref(fig:hist-charges)
+mostra que `charges` é fortemente assimétrico à direita: a maioria dos beneficiários
+concentra-se em custos baixos, com uma cauda longa de casos muito caros. Após a
+transformação logarítmica, a distribuição torna-se aproximadamente simétrica. Essa é
+a principal decisão de pré-processamento do trabalho: **adotamos $\log(\texttt{charges})$
+como variável resposta**, o que estabiliza a variância e aproxima os resíduos da
+normalidade (conforme confirmado no Apêndice).
+
+```{r hist-charges, fig.cap="Distribuição do custo médico anual na escala original (esquerda) e logarítmica (direita). A forte assimetria à direita na escala original motiva o uso de log(charges) como resposta.", fig.align='center', fig.width=7, fig.height=3}
+p1 <- ggplot(dados, aes(x = charges)) +
+  geom_histogram(bins = 30, fill = "#3182bd", color = "white") +
+  labs(x = "Custo (US$)", y = "Frequência") +
+  theme_minimal()
+p2 <- ggplot(dados, aes(x = log(charges))) +
+  geom_histogram(bins = 30, fill = "#3182bd", color = "white") +
+  labs(x = "log(Custo)", y = "Frequência") +
+  theme_minimal()
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+```
+
+**Pergunta 2: quais variáveis mais separam o custo?** A Figura \@ref(fig:box-cat)
+apresenta o custo por sexo, região, número de filhos e, sobretudo, por condição de
+tabagismo. O contraste entre fumantes e não fumantes é, de longe, o mais expressivo:
+o custo mediano dos fumantes é várias vezes maior. Sexo e região têm efeito modesto, e
+o número de filhos mostra leve tendência crescente.
+
+```{r box-cat, fig.cap="Distribuição do custo médico por condição de tabagismo, sexo, região e número de filhos. O tabagismo é a variável categórica que mais separa o custo.", fig.align='center', fig.width=7, fig.height=5}
+g_smoker <- ggplot(dados, aes(factor(smoker), charges, fill = factor(smoker))) +
+  geom_boxplot(alpha = .9) + scale_fill_brewer(palette = "Blues") +
+  labs(x = "Fumante", y = "Custo (US$)", title = "Por tabagismo") +
+  theme_minimal() + theme(legend.position = "none")
+g_sex <- ggplot(dados, aes(factor(sex), charges, fill = factor(sex))) +
+  geom_boxplot(alpha = .9) + scale_fill_brewer(palette = "Blues") +
+  labs(x = "Sexo", y = "Custo (US$)", title = "Por sexo") +
+  theme_minimal() + theme(legend.position = "none")
+g_region <- ggplot(dados, aes(factor(region), charges, fill = factor(region))) +
+  geom_boxplot(alpha = .9) + scale_fill_brewer(palette = "Blues") +
+  labs(x = "Região", y = "Custo (US$)", title = "Por região") +
+  theme_minimal() + theme(legend.position = "none",
+                          axis.text.x = element_text(angle = 20, hjust = 1))
+g_child <- ggplot(dados, aes(factor(children), charges, fill = factor(children))) +
+  geom_boxplot(alpha = .9) + scale_fill_brewer(palette = "Blues") +
+  labs(x = "Nº de filhos", y = "Custo (US$)", title = "Por nº de filhos") +
+  theme_minimal() + theme(legend.position = "none")
+gridExtra::grid.arrange(g_smoker, g_sex, g_region, g_child, ncol = 2)
+```
+
+**Pergunta 3: como idade e IMC se associam ao custo, e isso depende de fumar?** A
+Figura \@ref(fig:scatter-smoker) é o achado central da análise exploratória. À
+esquerda, a idade tem efeito linear positivo e semelhante em ambos os grupos, mas o
+patamar de custo é muito mais alto entre fumantes — sugerindo o tabagismo como fator
+dominante. À direita, surge o padrão que orienta toda a modelagem: entre não fumantes
+o custo é praticamente insensível ao IMC (curva quase plana), enquanto entre fumantes
+ele dispara a partir de IMC $\approx$ 30 (faixa de obesidade). Em outras palavras, **o
+efeito do IMC sobre o custo depende de fumar** — evidência visual de uma interação
+`smoker:bmi`, que justifica sua inclusão no modelo.
+
+```{r scatter-smoker, fig.cap="Custo por idade (esquerda) e por IMC (direita), segundo a condição de tabagismo. Entre não fumantes o IMC quase não altera o custo; entre fumantes o custo dispara após IMC aproximado de 30, evidenciando interação smoker:bmi.", fig.align='center', fig.width=7, fig.height=3}
+cores_smoker <- c("no" = "grey40", "yes" = "#08519c")
+s1 <- ggplot(dados, aes(age, charges, color = smoker)) +
+  geom_point(alpha = .4) + geom_smooth(method = "lm", se = FALSE) +
+  scale_color_manual(values = cores_smoker) +
+  labs(x = "Idade (anos)", y = "Custo (US$)", color = "Fumante") +
+  theme_minimal()
+s2 <- ggplot(dados, aes(bmi, charges, color = smoker)) +
+  geom_point(alpha = .4) + geom_smooth(method = "loess", se = FALSE) +
+  scale_color_manual(values = cores_smoker) +
+  labs(x = "IMC (kg/m²)", y = "Custo (US$)", color = "Fumante") +
+  theme_minimal()
+gridExtra::grid.arrange(s1, s2, ncol = 2)
+```
+
+
+\newpage
+
+# Modelo Proposto {#sec-modelo}
+
+<!-- Apresente o modelo ajustado -->
+
+<!-- Voce pode criar subseções se necessário -->
+
+<!-- Interprete parametros, forneça IC interessantes de acordo com os objetivos, apresente gráficos de interaçoes/estimativas se necessário -->
+
+<!-- Apresente o gráfico de predito x observado. Inclua uma reta coef=1 para auxiliar na avaliaçao-->
+
+```{r ajuste-modelo}
+fit_final <- lm(log(charges) ~ age + bmi + children + sex + smoker + region +
+                  smoker:bmi, data = dados)
+r2_aj <- summary(fit_final)$adj.r.squared
+cf <- coef(fit_final)
+ic <- confint(fit_final)
+# converte coeficientes em variação percentual aproximada: (exp(b)-1)*100
+pct <- function(b) (exp(b) - 1) * 100
+```
+
+Com base na análise exploratória, adotamos como modelo final uma regressão linear
+sobre o **logaritmo** do custo, incluindo todas as covariáveis e a interação
+`smoker:bmi`:
+
+$$
+\log(\widehat{\texttt{charges}}) = \beta_0 + \beta_1\,\texttt{age} + \beta_2\,\texttt{bmi}
++ \beta_3\,\texttt{children} + \beta_4\,\texttt{sex} + \beta_5\,\texttt{smoker}
++ \boldsymbol{\beta_6}\,\texttt{region} + \beta_7\,(\texttt{smoker}\times\texttt{bmi}) + \varepsilon.
+$$
+
+A escolha da escala logarítmica e da interação é justificada formalmente no Apêndice
+por meio de diagnósticos de resíduos e dos critérios AIC,
+BIC e teste $F$ aninhado. O modelo explica `r round(r2_aj * 100, 1)`% da variabilidade
+do log-custo (R² ajustado = `r round(r2_aj, 3)`). A Tabela \@ref(tab:coef) apresenta as
+estimativas dos parâmetros, seus intervalos de confiança de 95% e os respectivos
+p-valores.
+
+```{r coef}
+tab_coef <- tidy(fit_final, conf.int = TRUE) %>%
+  transmute(
+    Termo = c("Intercepto", "Idade", "IMC", "Nº de filhos", "Sexo (masculino)",
+              "Fumante (sim)", "Região: noroeste", "Região: sudeste",
+              "Região: sudoeste", "IMC : Fumante"),
+    Estimativa = round(estimate, 4),
+    `IC 95% inf` = round(conf.low, 4),
+    `IC 95% sup` = round(conf.high, 4),
+    `p-valor` = ifelse(p.value < 0.001, "< 0,001", formatC(p.value, format = "f", digits = 3))
+  )
+kable(tab_coef, booktabs = TRUE,
+      caption = "Estimativas do modelo final para log(charges): coeficientes, intervalos de confiança de 95\\% e p-valores.")
+```
+
+**Interpretação dos parâmetros.** Como a resposta está em escala logarítmica, cada
+coeficiente $\beta$ traduz-se em uma variação percentual aproximada do custo dada por
+$(e^{\beta}-1)\times 100\%$:
+
+- **Idade** ($\hat\beta = `r round(cf["age"], 4)`$): cada ano adicional de idade está
+  associado a um aumento de aproximadamente `r round(pct(cf["age"]), 1)`% no custo
+  esperado, mantidas as demais variáveis constantes.
+- **Número de filhos** ($\hat\beta = `r round(cf["children"], 4)`$): cada dependente
+  adicional eleva o custo em cerca de `r round(pct(cf["children"]), 1)`%.
+- **Sexo masculino** ($\hat\beta = `r round(cf["sexmale"], 4)`$): homens têm custo
+  esperado cerca de `r round(abs(pct(cf["sexmale"])), 1)`% menor que mulheres, tudo o
+  mais constante.
+- **Região**: tomando o nordeste como referência, as três demais regiões apresentam
+  custos esperados ligeiramente menores (entre `r round(abs(pct(cf["regionnorthwest"])), 1)`%
+  e `r round(abs(pct(cf["regionsoutheast"])), 1)`% inferiores).
+- **IMC e tabagismo (efeito conjunto).** Este é o resultado central. Por causa da
+  interação, o efeito do IMC sobre o custo **difere** entre fumantes e não fumantes:
+  - Entre **não fumantes**, o coeficiente do IMC é
+    $\hat\beta = `r round(cf["bmi"], 4)`$ (p = `r formatC(summary(fit_final)$coefficients["bmi","Pr(>|t|)"], format="f", digits=3)`),
+    ou seja, um aumento de 1 ponto no IMC eleva o custo em apenas cerca de
+    `r round(pct(cf["bmi"]), 1)`% — efeito pequeno e não significativo.
+  - Entre **fumantes**, o efeito do IMC é a soma dos coeficientes
+    `bmi` e `smoker:bmi` ($`r round(cf["bmi"], 4)` + `r round(cf["bmi:smokeryes"], 4)` = `r round(cf["bmi"] + cf["bmi:smokeryes"], 4)`$),
+    de modo que cada ponto adicional de IMC aumenta o custo em aproximadamente
+    `r round(pct(cf["bmi"] + cf["bmi:smokeryes"]), 1)`%. A interação
+    (`r round(cf["bmi:smokeryes"], 4)`; p < 0,001) é altamente significativa,
+    confirmando estatisticamente o padrão visto na Figura \@ref(fig:scatter-smoker):
+    **a obesidade é financeiramente onerosa sobretudo quando combinada ao tabagismo.**
+
+A Figura \@ref(fig:pred-obs) compara os valores preditos pelo modelo com os
+observados (na escala original de dólares, retornando $e^{\widehat{\log(\texttt{charges})}}$).
+Os pontos acompanham razoavelmente a reta identidade (coeficiente angular 1), indicando
+boa capacidade preditiva, com alguma subestimação nos custos mais altos — esperada por
+se tratar de um modelo na escala logarítmica.
+
+```{r pred-obs, fig.cap="Custo predito pelo modelo final versus custo observado (escala original, US\\$). A linha tracejada é a reta identidade (predito = observado).", fig.align='center', fig.width=4, fig.height=3, out.width="55%"}
+dados_pred <- dados %>%
+  mutate(predito = exp(predict(fit_final)))
+ggplot(dados_pred, aes(charges, predito)) +
+  geom_point(alpha = .4, color = "#3182bd") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "darkred") +
+  labs(x = "Custo observado (US$)", y = "Custo predito (US$)") +
+  theme_minimal()
+```
+
+
+\newpage
+
+# Discussão {#sec-disc}
+
+<!-- Discuta os resultados do modelo tendo em vista os objetivos propostos. Relevancia/utilidade do modelo no contexto do problema -->
+
+Retomando os objetivos da Seção \@ref(sec-intro), o modelo final responde de forma
+clara às perguntas propostas. Quanto ao **objetivo específico (i)** — o efeito isolado
+e conjunto de IMC e tabagismo —, os resultados mostram que esses dois fatores não atuam
+de forma independente: o IMC, isoladamente, tem efeito praticamente nulo sobre o custo
+entre não fumantes, mas torna-se um forte determinante entre fumantes. O tabagismo, por
+sua vez, é a variável de maior impacto individual, e seu efeito é amplificado pela
+obesidade. Esse achado reproduz, em dados de custo individual, a literatura clínica que
+aponta a combinação obesidade + tabagismo como especialmente deletéria
+[@stewart2009forecasting; @sturm2002obesity].
+
+Quanto ao **objetivo (ii)**, as demais covariáveis comportam-se conforme o esperado: a
+idade tem efeito positivo e significativo, o número de dependentes eleva moderadamente
+o custo, e sexo e região têm contribuições pequenas, porém estatisticamente detectáveis.
+O modelo explica cerca de `r round(r2_aj * 100, 1)`% da variabilidade do log-custo, um
+ajuste elevado para dados individuais de saúde. Quanto ao **objetivo (iii)**, a
+interpretação em termos de variação percentual ($(e^{\beta}-1)\times100\%$) permite que
+os resultados sejam comunicados a um público não técnico — por exemplo, "cada ano de
+idade encarece o plano em torno de `r round(pct(cf["age"]), 1)`%".
+
+Do ponto de vista aplicado, o modelo é diretamente útil para a precificação atuarial e
+a gestão de risco de operadoras de saúde, tanto no sistema privado norte-americano
+quanto na saúde suplementar brasileira regulada pela ANS [@ansteto2025]: ele identifica
+o subgrupo de fumantes obesos como o de maior custo esperado, justificando prêmios
+diferenciados e, sobretudo, programas de prevenção (cessação do tabagismo e controle de
+peso) com potencial retorno financeiro elevado.
+
+Como **limitações**, registram-se: (a) trata-se de dados observacionais, de modo que as
+associações estimadas não devem ser interpretadas como relações causais; (b) mesmo após a
+transformação logarítmica, os resíduos ainda exibem heterocedasticidade e caudas mais
+pesadas que a normal (Apêndice), o que recomenda cautela sobretudo na predição de custos
+extremos — embora o grande tamanho amostral assegure inferência aproximadamente válida
+sobre os coeficientes; e (c) o banco não inclui variáveis clínicas relevantes
+(comorbidades, histórico médico), o que limita o poder explicativo. Trabalhos futuros
+poderiam explorar erros-padrão robustos à heterocedasticidade, modelos com cauda pesada ou
+modelos de regressão gama, mais adequados a custos estritamente positivos e assimétricos.
+
+
+\newpage
+
+# Apêndice {-}
+
+
+<!-- aqui devem estar resultados que apoiam suas análises (modelos tentados, código de seleção de modelo/etc...), obrigatoriamente, esta seção deve conter o diagnóstico do modelo: gráficos e testes relevantes. -->
+
+## Seleção do modelo: escala da resposta e interação
+
+Foram comparados três modelos de complexidade crescente: (1) `fit_orig`, regressão de
+`charges` na escala original com todas as covariáveis; (2) `fit_log`, igual ao anterior
+mas com resposta $\log(\texttt{charges})$; e (3) `fit_final`, o modelo log acrescido da
+interação `smoker:bmi`.
+
+```{r modelos-apendice}
+fit_orig  <- lm(charges ~ ., data = dados)
+fit_log   <- lm(log(charges) ~ ., data = dados)
+# fit_final já ajustado na Seção 4
+
+bp_orig  <- bptest(fit_orig)$p.value
+bp_log   <- bptest(fit_log)$p.value
+```
+
+O teste de Breusch-Pagan detecta heterocedasticidade em **ambas** as escalas (escala
+original: p = `r formatC(bp_orig, format="e", digits=2)`; escala logarítmica:
+p = `r formatC(bp_log, format="e", digits=2)`). Ainda assim, a transformação logarítmica é
+adotada porque reduz drasticamente a forte assimetria à direita da resposta
+(Figura \@ref(fig:hist-charges)) e a severidade do padrão de funil nos resíduos, além de
+aproximar os resíduos da normalidade e permitir a interpretação dos efeitos em termos
+percentuais; a heterocedasticidade remanescente é tratada como limitação (Seção
+\@ref(sec-disc)). A Tabela \@ref(tab:comp-modelos) compara os dois modelos em escala
+logarítmica: a inclusão da interação aumenta o R² ajustado e reduz substancialmente tanto
+o AIC quanto o BIC (mesmo este último, que penaliza fortemente parâmetros extras).
+
+```{r comp-modelos}
+comp <- data.frame(
+  Modelo = c("log(charges) ~ . (sem interação)", "log(charges) ~ . + smoker:bmi"),
+  `R2 ajustado` = round(c(summary(fit_log)$adj.r.squared,
+                          summary(fit_final)$adj.r.squared), 4),
+  AIC = round(c(AIC(fit_log), AIC(fit_final)), 1),
+  BIC = round(c(BIC(fit_log), BIC(fit_final)), 1),
+  check.names = FALSE
+)
+kable(comp, booktabs = TRUE,
+      caption = "Comparação entre o modelo log sem e com a interação smoker:bmi.")
+anova_int <- anova(fit_log, fit_final)
+F_int <- anova_int$F[2]
+```
+
+O teste $F$ para modelos aninhados confirma a significância da interação
+($F = `r round(F_int, 1)`$; p < 0,001): a redução na soma de quadrados dos resíduos é
+grande demais para ser atribuída ao acaso. A evidência é, portanto, unânime a favor do
+modelo com interação, adotado como modelo final.
+
+## Diagnóstico do modelo final
+
+```{r diag-plots, fig.cap="Gráficos de diagnóstico dos resíduos do modelo final: resíduos vs. ajustados, Q-Q normal, escala-locação e resíduos vs. alavancagem.", fig.align='center', fig.width=7, fig.height=6}
+par(mfrow = c(2, 2))
+plot(fit_final)
+par(mfrow = c(1, 1))
+```
+
+```{r hist-resid, fig.cap="Histograma dos resíduos do modelo final com a densidade normal padrão sobreposta (linha vermelha).", fig.align='center', fig.width=4, fig.height=2.6, out.width="55%"}
+res <- residuals(fit_final)
+ggplot(data.frame(res), aes(res)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30,
+                 fill = "#3182bd", color = "white") +
+  stat_function(fun = dnorm, args = list(mean = mean(res), sd = sd(res)),
+                color = "darkred", linewidth = 1) +
+  labs(x = "Resíduos", y = "Densidade") +
+  theme_minimal()
+```
+
+```{r testes-diag}
+sh   <- shapiro.test(res)
+bp   <- bptest(fit_final)
+dw   <- dwtest(fit_final)
+```
+
+A Figura \@ref(fig:diag-plots) mostra que os resíduos não exibem padrão sistemático
+contra os valores ajustados (sustentando a forma funcional adotada), embora o Q-Q plot e
+o histograma da Figura \@ref(fig:hist-resid) revelem caudas mais pesadas que a normal. Os
+testes formais corroboram esse quadro:
+
+- **Normalidade (Shapiro-Wilk):** p = `r formatC(sh$p.value, format="e", digits=2)` —
+  rejeita-se a normalidade dos resíduos, devido às caudas pesadas. Dado o tamanho da
+  amostra (`r n_obs` observações), o Teorema Central do Limite garante validade aproximada
+  da inferência sobre os coeficientes.
+- **Homocedasticidade (Breusch-Pagan):** p = `r formatC(bp$p.value, format="e", digits=2)`
+  — **rejeita-se** a hipótese de variância constante: há heterocedasticidade remanescente,
+  embora atenuada em relação à escala original. Como a amostra é grande (`r n_obs`
+  observações), as estimativas dos coeficientes permanecem não-viesadas e a inferência é
+  aproximadamente válida; o ponto é retomado nas limitações (Seção \@ref(sec-disc)).
+- **Independência (Durbin-Watson):** p = `r formatC(dw$p.value, format="f", digits=3)` —
+  não há evidência de autocorrelação dos resíduos.
+
+Em síntese, o modelo final satisfaz a suposição de independência dos resíduos, mas
+apresenta dois desvios: heterocedasticidade remanescente (atenuada pela transformação
+logarítmica) e caudas mais pesadas que a normal. Ambos são mitigados pelo grande tamanho
+amostral e estão incorporados às limitações discutidas na Seção \@ref(sec-disc).
+
+## Correlação entre as variáveis contínuas
+
+A Figura \@ref(fig:ggpairs-cont) resume as relações entre as três variáveis contínuas do
+banco (custo, idade e IMC): o triângulo inferior traz os diagramas de dispersão, a
+diagonal as densidades univariadas e o triângulo superior os coeficientes de correlação
+de Pearson. As correlações entre os preditores (idade e IMC) são baixas, o que afasta
+preocupações com multicolinearidade; o custo, por sua vez, associa-se de forma apenas
+moderada às variáveis contínuas isoladamente — coerente com o achado de que o principal
+determinante (tabagismo e sua interação com o IMC) é categórico.
+
+```{r ggpairs-cont, fig.cap="Matriz de dispersão e correlações de Pearson entre as variáveis contínuas. Diagonal: densidade de cada variável; triângulo inferior: dispersão par a par; triângulo superior: correlação.", fig.align='center', fig.width=6, fig.height=5, out.width="80%"}
+dados %>%
+  select(charges, age, bmi) %>%
+  ggpairs(
+    columnLabels = c("Custo (US$)", "Idade", "IMC (kg/m²)"),
+    lower = list(continuous = wrap("points", colour = "#3182bd", alpha = 0.4)),
+    diag  = list(continuous = wrap("densityDiag", fill = "#3182bd", alpha = 0.6)),
+    upper = list(continuous = wrap("cor", size = 4))
+  ) +
+  theme_minimal()
+```
+
+## Ambiente computacional
+
+As análises foram conduzidas em R [@rcore2025], com os pacotes `tidyverse`
+[@tidyverse2019], `ggplot2` [@ggplot2], `GGally` [@GGally], `lmtest` [@lmtest2002],
+`broom` [@broom2026] e `knitr` [@knitr2025]; o relatório foi compilado com `bookdown`
+[@bookdown2025].
+
+
+\newpage
+
+# Bibliografia {-}
+
+<!-- não coloque nada aqui, será feito automaticamente se vc usar .bib e @ para citar referencias no texto, conforme ilustrado no template de exemplo-->
+
+<!-- para construir o .bib, use o cite https://www.doi2bib.org/, caso seja uma referência com DOI -->
+
+<!-- ao utilizar cada método, cite o autor e também referencie o pacote utilizado, no R, pegue o .bib usando citation("nomedopacote") -->

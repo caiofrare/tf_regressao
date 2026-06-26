@@ -1,0 +1,366 @@
+
+---
+title: "análises TF reg"
+output: html_document
+date: "2026-06-16"
+---
+
+# ============================================================
+# RASCUNHO EXPLORATÓRIO — Trabalho Final de Análise de Regressão
+# Esse arquivo não faz parte do relatório final (TF.Rmd).
+# Serve como caderno de exploração: cada bloco foi escrito
+# durante o processo de análise e documenta as decisões que
+# foram tomadas ao longo do caminho.
+# explorar → modelar → comparar.
+# ============================================================
+
+
+# ------------------------------------------------------------
+# 0. Pacotes e semente
+# ------------------------------------------------------------
+
+```{r}
+library(tidyverse)
+library(GGally)
+library(lmtest)
+set.seed(1)
+```
+
+
+# ------------------------------------------------------------
+# 1. Carregamento dos dados
+# O dataset é baixado diretamente de um espelho público no GitHub
+# para garantir reprodutibilidade sem depender de arquivo local.
+# Fonte original: Kaggle (mirichoi0218/insurance).
+# ------------------------------------------------------------
+
+```{r}
+url <- "https://raw.githubusercontent.com/stedy/Machine-Learning-with-R-datasets/master/insurance.csv"
+dados <- tryCatch(
+  read.csv(url, stringsAsFactors = FALSE),
+  error = function(e) NULL
+)
+```
+
+
+# ------------------------------------------------------------
+# 2. Distribuição da variável resposta e dos preditores numéricos
+#
+# Ponto de partida da análise: entender como cada variável
+# se distribui individualmente antes de olhar relações.
+#
+# Decisão chave aqui: charges é fortemente assimétrico à direita.
+# A versão em log fica aproximadamente simétrica — isso motiva
+# usar log(charges) como resposta no modelo.
+# ------------------------------------------------------------
+
+```{r}
+# Custo original: assimetria à direita evidente
+dados %>%
+  ggplot(aes(x = charges)) +
+  geom_histogram(bins = 30, fill = "#3182bd", color = "white") +
+  labs(title = "Distribuição do custo médico (charges)",
+       x = "Custo em US$", y = "Frequência") +
+  theme_minimal()
+
+# Log do custo: distribuição bem mais simétrica → justifica usar log(charges)
+dados %>%
+  ggplot(aes(x = log(charges))) +
+  geom_histogram(bins = 30, fill = "#3182bd", color = "white") +
+  labs(title = "Distribuição do log do custo médico",
+       x = "log(Custo em US$)", y = "Frequência") +
+  theme_minimal()
+
+# Idade: distribuição aproximadamente uniforme entre 18 e 64 anos
+dados %>%
+  ggplot(aes(x = age)) +
+  geom_histogram(bins = 30, fill = "#3182bd", color = "white") +
+  labs(title = "Distribuição da idade",
+       x = "Idade (anos)", y = "Frequência") +
+  theme_minimal()
+
+# IMC: distribuição aproximadamente normal, centrada em torno de 30
+dados %>%
+  ggplot(aes(x = bmi)) +
+  geom_histogram(bins = 30, fill = "#3182bd", color = "white") +
+  labs(title = "Distribuição do IMC",
+       x = "IMC (kg/m²)", y = "Frequência") +
+  theme_minimal()
+```
+
+
+# ------------------------------------------------------------
+# 3. Custo por variáveis categóricas (boxplots)
+#
+# Objetivo: identificar quais categorias mais separam o custo.
+# Spoiler: tabagismo é de longe o fator mais discriminante.
+# Sexo e região têm efeito modesto; número de filhos mostra
+# leve tendência crescente.
+# ------------------------------------------------------------
+
+```{r}
+rotulos <- list(
+  smoker   = list(x = "Fumante",         titulo = "Custo por condição de fumante"),
+  sex      = list(x = "Sexo",            titulo = "Custo por sexo"),
+  region   = list(x = "Região",          titulo = "Custo por região"),
+  children = list(x = "Número de filhos", titulo = "Custo por número de filhos")
+)
+
+c("smoker", "sex", "region", "children") %>%
+  lapply(function(v) {
+    dados %>%
+      ggplot(aes(x = factor(.data[[v]]), y = charges, fill = factor(.data[[v]]))) +
+      geom_boxplot(alpha = 0.9) +
+      scale_fill_brewer(palette = "Blues") +
+      labs(title = rotulos[[v]]$titulo,
+           x = rotulos[[v]]$x,
+           y = "Custo (US$)") +
+      theme_minimal() +
+      theme(legend.position = "none")
+  })
+```
+
+
+# ------------------------------------------------------------
+# 4. Frequência das variáveis categóricas
+#
+# Verifica se os grupos são balanceados — importante para
+# avaliar se algum nível tem observações demais/de menos.
+# Resultado: sexo e região são bem balanceados; fumantes
+# representam ~20% da amostra (minoria, mas com efeito enorme).
+# ------------------------------------------------------------
+
+```{r}
+c("smoker", "sex", "region", "children") %>%
+  lapply(function(v) {
+    dados %>%
+      count(.data[[v]]) %>%
+      mutate(proporcao = round(n / sum(n) * 100, 1))
+  })
+```
+
+
+# ------------------------------------------------------------
+# 5. Correlações entre variáveis contínuas (matriz de pares)
+#
+# Objetivo: checar multicolinearidade entre preditores e
+# ver correlação individual de cada um com charges.
+# Resultado: age e bmi têm correlação baixa entre si (bom).
+# Correlação de cada um com charges é moderada isoladamente —
+# o tabagismo (variável categórica) é que faz a diferença grande.
+# ------------------------------------------------------------
+
+```{r}
+dados %>%
+  select(charges, age, bmi) %>%
+  ggpairs(
+    lower = list(continuous = wrap("points", colour = "#3182bd", alpha = 0.4)),
+    diag  = list(continuous = wrap("densityDiag", fill = "#3182bd", alpha = 0.6)),
+    upper = list(continuous = wrap("cor", size = 4))
+  ) +
+  theme_minimal()
+```
+
+
+# ------------------------------------------------------------
+# 6. Custo por idade e IMC, separado por tabagismo
+#
+# Esse é o gráfico que orienta toda a modelagem.
+#
+# age × charges: a idade tem efeito linear positivo semelhante
+# nos dois grupos, mas o patamar dos fumantes é muito mais alto.
+# Isso sugere smoker como fator dominante e aditivo à idade.
+#
+# bmi × charges: o achado central. Entre não fumantes a curva
+# é quase plana — IMC mal mexe no custo. Entre fumantes ela
+# dispara depois de bmi ≈ 30 (faixa de obesidade). Esse "cotovelo"
+# só aparece com loess (suavização flexível); uma reta esconderia.
+# Isso é evidência visual clara de interação smoker:bmi,
+# que justifica incluí-la no modelo.
+# ------------------------------------------------------------
+
+```{r}
+cores_smoker <- c("no" = "black", "yes" = "#08519c")
+
+# age × charges por tabagismo: efeito linear paralelo, patamar diferente
+dados %>%
+  ggplot(aes(x = age, y = charges, color = smoker)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE) +
+  scale_color_manual(values = cores_smoker) +
+  labs(title = "Custo por idade, segundo condição de fumante",
+       x = "Idade (anos)", y = "Custo (US$)", color = "Fumante") +
+  theme_minimal()
+
+# bmi × charges por tabagismo: interação clara acima de bmi ≈ 30
+dados %>%
+  ggplot(aes(x = bmi, y = charges, color = smoker)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess", se = FALSE) +
+  scale_color_manual(values = cores_smoker) +
+  labs(title = "Custo por IMC, segundo condição de fumante",
+       x = "IMC (kg/m²)", y = "Custo (US$)", color = "Fumante") +
+  theme_minimal()
+
+# Versão facetada do bmi × charges: deixa ainda mais claro
+# que a curva dos não fumantes é plana e a dos fumantes sobe
+dados %>%
+  ggplot(aes(x = bmi, y = charges)) +
+  geom_point(alpha = 0.5, color = "#3182bd") +
+  geom_smooth(method = "loess", se = FALSE, color = "#08519c") +
+  facet_wrap(~ smoker) +
+  labs(title = "Custo por IMC, separado por condição de fumante",
+       x = "IMC (kg/m²)", y = "Custo (US$)") +
+  theme_minimal()
+
+# bmi × charges facetado por número de filhos: sem padrão relevante
+dados %>%
+  ggplot(aes(x = bmi, y = charges)) +
+  geom_point(alpha = 0.5, color = "#3182bd") +
+  geom_smooth(method = "loess", se = FALSE, color = "#08519c") +
+  facet_wrap(~ children) +
+  labs(title = "Custo por IMC, separado por número de filhos",
+       x = "IMC (kg/m²)", y = "Custo (US$)") +
+  theme_minimal()
+```
+
+
+# ------------------------------------------------------------
+# 7. Modelo 1 — regressão na escala original: charges ~ .
+#
+# Ponto de partida natural. R² ajustado razoável (0,749),
+# mas os diagnósticos mostram problemas sérios:
+# - Resíduos vs. Fitted: padrão em funil (heterocedasticidade)
+# - Q-Q plot: caudas pesadas
+# - Shapiro-Wilk: rejeita normalidade
+# - Breusch-Pagan: rejeita homocedasticidade
+# - Durbin-Watson: não rejeita independência (OK)
+# Conclusão: escala original não é adequada → tentar log(charges)
+# ------------------------------------------------------------
+
+```{r}
+fit1 <- lm(data = dados, charges ~ .)
+summary(fit1)  # R² ajustado ≈ 0,749
+
+par(mfrow = c(2, 2))
+plot(fit1)
+par(mfrow = c(1, 1))
+
+shapiro.test(residuals(fit1))  # rejeita normalidade
+bptest(fit1)                   # rejeita homocedasticidade
+dwtest(fit1)                   # não rejeita independência
+
+# Salvando p-valores para comparação posterior
+bp_fit1 <- bptest(fit1)$p.value
+sw_fit1 <- shapiro.test(residuals(fit1))$p.value
+```
+
+
+# ------------------------------------------------------------
+# 8. Modelo 2 — regressão com log(charges) ~ .
+#
+# A transformação logarítmica melhora o ajuste (R² adj ≈ 0,767)
+# e reduz a severidade dos desvios nos diagnósticos.
+# A heterocedasticidade persiste (Breusch-Pagan ainda rejeita),
+# mas o padrão em funil é muito menos pronunciado.
+# A normalidade dos resíduos ainda é rejeitada, mas as caudas
+# são mais leves que no modelo 1.
+# Conclusão: log(charges) é claramente melhor → adotar como resposta.
+# ------------------------------------------------------------
+
+```{r}
+fit2 <- lm(data = dados, log(charges) ~ .)
+summary(fit2)  # R² ajustado ≈ 0,767
+
+par(mfrow = c(2, 2))
+plot(fit2)
+par(mfrow = c(1, 1))
+
+shapiro.test(residuals(fit2))  # ainda rejeita, mas caudas mais leves
+bptest(fit2)                   # ainda rejeita, mas padrão atenuado
+dwtest(fit2)                   # não rejeita independência (OK)
+```
+
+
+# ------------------------------------------------------------
+# 9. Modelo 3 (FINAL) — log(charges) com interação smoker:bmi
+#
+# Motivado pelo gráfico da seção 6: o efeito do IMC sobre o
+# custo depende de fumar. Adicionar smoker:bmi captura isso.
+#
+# R² ajustado sobe para ≈ 0,782 — ganho real mesmo com penalização.
+# Os diagnósticos não pioram; a heterocedasticidade remanescente
+# e as caudas pesadas são tratadas como limitação no relatório.
+# ------------------------------------------------------------
+
+```{r}
+fit3 <- lm(log(charges) ~ age + bmi + children + sex + smoker + region +
+             smoker:bmi, data = dados)
+summary(fit3)  # R² ajustado ≈ 0,782
+
+par(mfrow = c(2, 2))
+plot(fit3)
+par(mfrow = c(1, 1))
+
+shapiro.test(residuals(fit3))  # ainda rejeita (caudas pesadas)
+bptest(fit3)                   # ainda rejeita (heterocedasticidade remanescente)
+dwtest(fit3)                   # não rejeita independência (OK)
+
+# Histograma dos resíduos com normal sobreposta
+hist(fit3$residuals, prob = TRUE,
+     main = "Resíduos do modelo final", xlab = "Resíduos")
+curve(dnorm(x, mean = mean(fit3$residuals), sd = sd(fit3$residuals)),
+      col = "darkred", lwd = 2, add = TRUE)
+```
+
+
+# ------------------------------------------------------------
+# 10. Comparação entre os modelos log (fit2 vs. fit3)
+#
+# Critérios usados: R² ajustado, AIC, BIC e teste F aninhado.
+#
+# R² ajustado: 0,767 → 0,782 (ganho real, já penalizado)
+# AIC: 1637 → 1546 (queda de 91 pts — evidência decisiva a favor do fit3)
+# BIC: 1689 → 1603 (queda de 86 pts — mesmo com penalização mais severa)
+# Teste F aninhado: F ≈ 95,5, p < 0,001 — a melhora não é acaso
+#
+# Conclusão unânime: a interação smoker:bmi deve permanecer no modelo.
+# fit3 é adotado como modelo final.
+# ------------------------------------------------------------
+
+```{r}
+# R² ajustado
+summary(fit2)$adj.r.squared  # 0,767
+summary(fit3)$adj.r.squared  # 0,782
+
+# AIC e BIC
+AIC(fit2, fit3)
+BIC(fit2, fit3)
+
+# Teste F aninhado: H0 = coeficiente da interação é zero
+anova(fit2, fit3)
+```
+
+
+# ------------------------------------------------------------
+# 11. Modelo 4 — versão reduzida (sem sex e region)
+#
+# Exploração: o que acontece se removermos as covariáveis
+# com menor efeito prático (sexo e região)?
+# O R² ajustado cai um pouco; preferimos o modelo completo
+# (fit3) por ser mais informativo e ainda parcimonioso.
+# ------------------------------------------------------------
+
+```{r}
+fit4 <- lm(data = dados, log(charges) ~ age + bmi + children + smoker + smoker:bmi)
+summary(fit4)
+
+par(mfrow = c(2, 2))
+plot(fit4)
+par(mfrow = c(1, 1))
+
+hist(fit4$residuals, prob = TRUE,
+     main = "Resíduos do modelo reduzido (fit4)", xlab = "Resíduos")
+curve(dnorm(x, mean = mean(fit4$residuals), sd = sd(fit4$residuals)),
+      col = "darkred", lwd = 2, add = TRUE)
+```
